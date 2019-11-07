@@ -17,9 +17,10 @@ from util.extractor_posts import extract_post_info
 import datetime
 from util.instalogger import InstaLogger
 from util.exceptions import PageNotFound404, NoInstaProfilePageFound
+from util.image_comparison import is_no_profile_img
+from util.string_util import get_number_numerical, num_words_in_string
 
-
-def get_user_info(browser, username):
+def get_user_info(browser, username, should_extract_followers = False):
     """Get the basic user info from the profile screen"""
     num_of_posts = 0
     followers = { 'count' : 0}
@@ -53,7 +54,7 @@ def get_user_info(browser, username):
         InstaLogger.logger().info("Bio Url is empty")
 
     try:
-        img_container = browser.find_element_by_class_name('RR-M-')
+        img_container = browser.find_element_by_tag_name('header')
         prof_img = img_container.find_element_by_tag_name('img').get_attribute('src')
     except:
         InstaLogger.logger().info("image is empty")
@@ -74,9 +75,8 @@ def get_user_info(browser, username):
 
         try:
             followers = { 'count' : extract_exact_info(infos[1])}
-
             try:
-                if Settings.scrape_follower == True:
+                if should_extract_followers == True:
                     if isprivate == True:
                         InstaLogger.logger().info("Cannot get Follower List - private account")
                     else:
@@ -338,7 +338,7 @@ def extract_user_posts(browser, num_of_posts_to_do):
     return post_infos, user_commented_total_list
 
 
-def extract_information(browser, username, limit_amount):
+def extract_information(browser, username, should_extract_followers, limit_amount):
     InstaLogger.logger().info('Extracting information from ' + username)
     """Get all the information for the given username"""
     isprivate = False
@@ -352,7 +352,7 @@ def extract_information(browser, username, limit_amount):
 
 
     try:
-        userinfo = get_user_info(browser, username)
+        userinfo = get_user_info(browser, username, should_extract_followers)
         if limit_amount < 1:
             limit_amount = 999999
         num_of_posts_to_do = min(limit_amount, userinfo['num_of_posts'])
@@ -391,5 +391,31 @@ def extract_information(browser, username, limit_amount):
             if last != user_commented_total_list[i]:
                 user_commented_list.append(user_commented_total_list[i])
             last = user_commented_total_list[i]
+    user_commented_list = []
 
     return userinfo, user_commented_list
+
+def get_num_length_comparison(string):
+    if not string:
+        return 0
+
+    return get_number_numerical(string) / len(string)
+                     
+def format_user_info(userinfo):
+    no_profile_pic = is_no_profile_img(userinfo['prof_img'])
+
+    info = {}
+    info['username'] = userinfo['username']
+    info['profile pic'] = 0 if no_profile_pic else 1
+    info['nums/length username'] = get_num_length_comparison(userinfo['username'])
+    info['fullname words'] = num_words_in_string(userinfo['alias'])
+    info['nums/length fullname'] = get_num_length_comparison(userinfo['alias'])
+    info['name==username'] = 1 if userinfo['username'] == userinfo['alias'] else 0
+    info['description length'] = len(userinfo['bio']) if userinfo['bio'] else 0
+    info['external URL'] = 1 if userinfo['bio_url'] else 0
+    info['private'] = 1 if userinfo['isprivate'] else 0
+    info['#posts'] = userinfo['num_of_posts']
+    info['#followers'] = userinfo['followers']['count']
+    info['#follows'] = userinfo['following']['count']
+    
+    return info
